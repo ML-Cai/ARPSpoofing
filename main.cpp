@@ -160,6 +160,6 @@ int main()
 	free(Soruce_MAC);
 	free(EthernetFrame);
 	free(Spoofing_IP);
-	freeSpoofing_MAC
+	free(Spoofing_MAC);
 	printf("finish\n");
 }
