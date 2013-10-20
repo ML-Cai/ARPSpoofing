@@ -65,6 +65,7 @@ int Pass_flag =0 ;	// -P , pass data format resolution check
 int I_flag =0 ;		// -i , interface flag
 int S_flag =0 ;		// -s , spoofing
 int T_flag =0 ;		// -t , Target IP flag
+
 //--------------------------------------------------------------------------
 // **************************************
 // MAC address format check function
@@ -186,6 +187,45 @@ ResError :
 	return 0 ;
 }
 //--------------------------------------------------------------------------
+// Get Local Interface information
+int getInterfaceInfo(unsigned char * iface ,unsigned char *local_IP ,unsigned char *local_MAC )
+{
+	// Get MAC address
+	char tMAC[18]="";
+	char ifPath[256]="/sys/class/net/";
+        strcat(ifPath ,(char*)iface);
+        strcat(ifPath ,"/address");
+
+	FILE *if_f =fopen(ifPath , "r");
+	if(if_f == NULL)
+	    return 0 ;
+	else
+	{
+	    fread(tMAC ,1 ,17 ,if_f);		//read MAC from /sys/class/net/iface/address
+	    fclose(if_f) ;
+	    for(int i=0 ; i<6 ;i++)		// confirm data to  local_MAC
+            {
+                *(local_MAC+i) = MAC_SubFormatTransform(&tMAC[i*3]) ;
+            }
+	}
+
+	// Get IP address
+	int fd;
+	struct ifreq ifr;
+	in_addr tIP ;
+
+	fd = socket(AF_INET, SOCK_DGRAM, 0);	//using ioctl get IP address
+	ifr.ifr_addr.sa_family = AF_INET;
+	strcpy(ifr.ifr_name , (char*)iface);
+	ioctl(fd, SIOCGIFADDR, &ifr);
+	close(fd);
+
+	tIP =((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr;
+	memcpy((char*)local_IP , &tIP ,sizeof(in_addr));
+
+	return 1;
+}
+//--------------------------------------------------------------------------
 // ARP spoofing main
 int main(int argc, char* argv[])
 {
@@ -258,22 +298,19 @@ int main(int argc, char* argv[])
     	    }
 	}
 
-	if(I_flag ==0 || S_flag ==0 || T_flag ==0)
+	if(I_flag ==0 ||
+	   S_flag ==0 ||
+	   T_flag ==0 ||
+	   getInterfaceInfo(NetInterface , Soruce_IP ,Soruce_MAC) == 0)
 	{
 	    printf("ARP_Spoofing Error\n");
 	    exit(-1);
 	}
 
-
-	unsigned int tSoruce_IP      = inet_addr("192.168.0.4");
-        unsigned int tSpoofing_IP    = inet_addr("192.168.0.6");
-        memcpy(Soruce_IP , &tSoruce_IP ,sizeof(int));
-
-	unsigned char tSoruce_MAC[] 	= {0xc8,0xa0,0x30,0xb6,0x5c,0x1c ,0x0};
+	//--------------------------------------------------------------------
 	unsigned char tTarget_MAC[]	= {0x54,0x04,0xa6,0x75,0x8b,0x29 ,0x0};
-	unsigned char tSpoofing_MAC[]	= {0xc8,0xa0,0x30,0xb6,0x5c,0x22 ,0x0};
-	memcpy(Soruce_MAC , tSoruce_MAC ,sizeof(char)*6);
 	memcpy(Target_MAC , tTarget_MAC ,sizeof(char)*6);
+	//---------------------------------------------------------------------
 
 
 	// set ARP header
