@@ -3,6 +3,7 @@ This program support an simple operator of ARP spoofing .
 NOTE : 	DO NOT use this programing in illegal area , this program is written for education .
 
 Current Release Version :
+
 	Version 1.2 :   Add -i Control Operator ,
         	        Update Localhost IP/MAC information fetch function ,
                 	Enhance -t Operator , add ARP table lookup capability .
