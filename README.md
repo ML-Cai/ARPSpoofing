@@ -28,7 +28,7 @@ Current Release Version :
 
 	choose which interface you want sending this packet .
 
--P :
+-P : (unuse)
 
 	this argument means "ignore"/"pass" inpute data format recognization ,
 	program speeded up when using this operator , BUT is has some side effect ,

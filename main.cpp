@@ -16,6 +16,16 @@
 
 
 /*
+
+ BUG list:
+	1. using unlink interface to send pakcet , may cause an error
+	2. -P flag unuse
+*/
+
+
+
+
+/*
 Version 1.0 : 	Basic ARP Spoofing function
 Version 1.1 : 	Add Control Operatior (-t , -s)
 Version 1.2 : 	Add -i Control Operator ,
@@ -192,7 +202,11 @@ ResError :
 	return 0 ;
 }
 //--------------------------------------------------------------------------
-// Get Local Interface information
+// **********************************
+// Get Localhost Interface information
+// **********************************
+//
+// get localhost MAC and IP via iface
 int getInterfaceInfo(unsigned char * iface ,unsigned char *local_IP ,unsigned char *local_MAC )
 {
 	// Get MAC address
@@ -215,6 +229,8 @@ int getInterfaceInfo(unsigned char * iface ,unsigned char *local_IP ,unsigned ch
 	}
 
 	// Get IP address
+	// using ioctrl to get local IP ,
+	// it may not bt an best way to achive that , i still search another way
 	int fd;
 	struct ifreq ifr;
 	in_addr tIP ;
@@ -242,6 +258,8 @@ int getInterfaceInfo(unsigned char * iface ,unsigned char *local_IP ,unsigned ch
 
 int FetchARPTable(char * TargetIP , char * TargetMAC)
 {
+	// ARP table at /proc/net/arp
+
 	int ret =FETCH_ARP_TABLE_UNKNOW;
 	FILE *ARP_f =fopen("/proc/net/arp" , "r");
 
@@ -252,7 +270,7 @@ int FetchARPTable(char * TargetIP , char * TargetMAC)
 	else
 	{
 	    // pass title
-	    char Title[100] ;
+	    char Title[100] ;		//file title , pass that
 	    fgets(Title ,100 ,ARP_f);
 
 	    char t_IP[15] ;
@@ -261,13 +279,13 @@ int FetchARPTable(char * TargetIP , char * TargetMAC)
 	    char t_MAC[17] ;
 	    char t_Mask[5] ;
 	    char t_Device[16] ;
-	    while(!feof(ARP_f))
+	    while(!feof(ARP_f)) //search arp table
 	    {
 		fscanf(ARP_f ,"%s %s %s %s %s %s",t_IP,t_HW_type,t_Flags,t_MAC,t_Mask,t_Device);
 		if(strcmp(t_IP ,TargetIP)==0 &&
 		   strcmp(t_Flags ,"0x2")==0)
 		{
-		    printf("%s|%s|%s|%s|%s|%s\n",t_IP,t_HW_type,t_Flags,t_MAC,t_Mask,t_Device) ;
+		    //printf("%s|%s|%s|%s|%s|%s\n",t_IP,t_HW_type,t_Flags,t_MAC,t_Mask,t_Device) ;	// if you want to look data , unmark that
 		    ret =FETCH_ARP_TABLE_SUCCESS;
 		    // copy data to Target_MAC
 		    for(int i=0 ; i<6 ;i++)
@@ -283,7 +301,9 @@ int FetchARPTable(char * TargetIP , char * TargetMAC)
 }
 
 //--------------------------------------------------------------------------
+// ********************
 // ARP spoofing main
+// ********************
 int main(int argc, char* argv[])
 {
 	unsigned char NetInterface[16] 	="eth0";
