@@ -1,6 +1,6 @@
 This program support an simple operator of ARP spoofing .
 
-NOTE : 	DO NOT use this programing in illegal area , this program is written for education .
+NOTE : 	DO NOT use this programing in illegal area , this program is written for education creater will not responsible for any loss.
 
 Current Release Version :
 
